@@ -21,6 +21,11 @@ from pdf_loader import PDFDocumentationLoader, create_documentation_context
 load_dotenv()
 
 
+# Ollama server URL — configurable via .env (OLLAMA_BASE_URL), e.g.
+# http://localhost:11434 (local) or http://192.168.1.100:11434 (remote).
+DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
 # ==============================================================================
 # 0. TERMINAL COLORS
 # ==============================================================================
@@ -247,7 +252,7 @@ class FirewallAgent:
     def __init__(
         self,
         model: str = "llama2",
-        base_url: str = "http://localhost:11434",
+        base_url: str = None,
         temperature: float = 0.3,
     ):
         """
@@ -256,9 +261,12 @@ class FirewallAgent:
         Args:
             model: Ollama model name (default: llama2)
                    Popular options: llama2, mistral, neural-chat, openchat
-            base_url: Ollama server URL (default: http://localhost:11434)
+            base_url: Ollama server URL. Defaults to OLLAMA_BASE_URL from .env,
+                      falling back to http://localhost:11434.
             temperature: Model temperature (0-1, default: 0.3 for consistency)
         """
+        if base_url is None:
+            base_url = DEFAULT_OLLAMA_URL
         self.model_name = model
         self.base_url = base_url
 
@@ -496,7 +504,7 @@ documentation is relevant, write "Recommendation: none":"""
 
 def create_firewall_agent(
     model: str = "llama2",
-    base_url: str = "http://localhost:11434",
+    base_url: str = None,
     temperature: float = 0.3,
 ) -> FirewallAgent:
     """
@@ -504,7 +512,8 @@ def create_firewall_agent(
 
     Args:
         model: Ollama model name (default: llama2)
-        base_url: Ollama server URL
+        base_url: Ollama server URL. Defaults to OLLAMA_BASE_URL from .env,
+                  falling back to http://localhost:11434.
         temperature: Model temperature (0-1)
 
     Returns:
