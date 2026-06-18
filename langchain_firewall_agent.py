@@ -270,7 +270,7 @@ class FirewallAgent:
             base_url=base_url,
             temperature=temperature,
             num_ctx=4096,      # Context window size
-            num_predict=350,   # Cap response length to keep answers short
+            num_predict=1024,  # Generous cap so tool calls / answers aren't truncated
         )
 
         self.documentation = create_documentation_context()
@@ -332,22 +332,23 @@ best practice guidance by combining live data and reference documentation.
 {json.dumps({k: v['description'] for k, v in TOOLS.items()}, indent=2)}
 
 When answering questions:
-1. Use tools to fetch current firewall state
-2. Cross-reference observations with documentation
-3. Provide specific, actionable recommendations
-4. Always cite the documentation for justification
+1. ALWAYS fetch live data first by emitting a tool call. Do not describe which
+   tool you would use or answer from memory — actually call it.
+2. To call a tool, output a line in EXACTLY this format and nothing else:
+   TOOL: tool_name(param=value)
+   (omit the parentheses arguments if the tool takes none, e.g. TOOL: list_firewall_policies())
+3. After you receive the tool result, analyze it and give the real answer.
+4. Cross-reference the data with the documentation where relevant.
 
 ## Official Documentation:
 
 {self.documentation}
 
 ## Communication Style:
-- Be brief. Answer in at most 3-5 short sentences or a few bullet points.
-- Lead with the direct answer first; add detail only if essential.
-- Do NOT include examples, sample commands, or hypothetical scenarios unless explicitly asked.
-- Do NOT restate the question or pad with background the user did not request.
-- Only cite documentation when it directly justifies the answer.
-- Stop as soon as the question is answered."""
+- Base every answer on data you fetched with a tool, not on assumptions.
+- Give a complete, specific answer using the actual values from the firewall.
+- Do NOT include examples, sample commands, or hypothetical scenarios.
+- Be focused — no filler or restating the question — but do not omit relevant detail."""
 
     def _call_tool(self, tool_name: str, **kwargs) -> str:
         """Call a tool and return result."""
@@ -403,9 +404,10 @@ When answering questions:
 User Question: {question}
 
 Instructions:
-- If you need data from the firewall, use tool calls with format: TOOL: tool_name(param=value)
-- Answer briefly: 3-5 short sentences or a few bullets, direct answer first.
-- No examples, sample commands, or extra background unless explicitly asked.
+- If the question needs firewall data, your FIRST output must be a tool call line:
+  TOOL: tool_name(param=value)
+  Output only that line — do not explain or answer yet. You will get the result next.
+- Once you have the data, answer using the real values. No examples or hypotheticals.
 
 Answer:"""
 
@@ -444,7 +446,9 @@ Previous Response:
 Tool Result from {tool_name}:
 {tool_result}
 
-Now answer the question briefly (3-5 short sentences or a few bullets), direct answer first, no examples:"""
+Now answer the question using the real values from the tool result above.
+Be specific and focused, with no examples or hypotheticals. If you need more
+data, emit another TOOL: call instead of answering:"""
 
             response = self.llm.invoke(prompt)
 
