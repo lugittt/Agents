@@ -96,9 +96,39 @@ class FortiGateClient:
 
     # --- Logs & monitoring ---
 
+    # Tried in order when no explicit log source is given. Different FortiGate
+    # configs store logs in different places (diskless models log to memory,
+    # others forward to FortiCloud), so we probe until one returns data.
+    LOG_SOURCES = ("disk", "memory", "forticloud")
+
+    def _read_log(self, suffix: str, extra: dict, source: Optional[str] = None) -> list:
+        """
+        Read a log endpoint, falling back across log sources.
+
+        suffix: path after the source segment, e.g. "traffic/forward".
+        source: if given, only that source is tried; otherwise LOG_SOURCES
+                are tried in order and the first non-empty result is returned.
+        """
+        sources = [source] if source else list(self.LOG_SOURCES)
+        for src in sources:
+            try:
+                data = self._check(
+                    self.client.get(
+                        f"{self.base_url}/log/{src}/{suffix}",
+                        params=self._params(extra),
+                    )
+                )
+            except httpx.HTTPStatusError:
+                # This source isn't available on this device — try the next.
+                continue
+            results = data.get("results", [])
+            if results:
+                return results
+        return []
+
     def get_traffic_logs(
         self,
-        source: str = "disk",
+        source: Optional[str] = None,
         log_type: str = "forward",
         rows: int = 50,
         srcip: Optional[str] = None,
@@ -106,7 +136,7 @@ class FortiGateClient:
         action: Optional[str] = None,
         policyid: Optional[int] = None,
     ) -> list:
-        """Read traffic logs. source: disk|memory|forticloud. log_type: forward|local|multicast."""
+        """Read traffic logs. source: disk|memory|forticloud (None = auto fallback). log_type: forward|local|multicast."""
         extra: dict = {"rows": rows}
         if srcip:
             extra["srcip"] = srcip
@@ -116,13 +146,7 @@ class FortiGateClient:
             extra["action"] = action
         if policyid is not None:
             extra["policyid"] = policyid
-        data = self._check(
-            self.client.get(
-                f"{self.base_url}/log/{source}/traffic/{log_type}",
-                params=self._params(extra),
-            )
-        )
-        return data.get("results", [])
+        return self._read_log(f"traffic/{log_type}", extra, source=source)
 
     def get_policy_stats(self) -> list:
         """Return per-policy packet/byte hit counters from the monitor API."""
@@ -144,28 +168,18 @@ class FortiGateClient:
         )
         return data.get("results", [])
 
-    def get_system_logs(self, rows: int = 50, severity: Optional[str] = None) -> list:
+    def get_system_logs(
+        self, rows: int = 50, severity: Optional[str] = None, source: Optional[str] = None
+    ) -> list:
         """Read system event logs. severity: critical|alert|error|warning|notice|info|debug."""
         extra: dict = {"rows": rows}
         if severity:
             extra["severity"] = severity
-        data = self._check(
-            self.client.get(
-                f"{self.base_url}/log/disk/system/event",
-                params=self._params(extra),
-            )
-        )
-        return data.get("results", [])
+        return self._read_log("system/event", extra, source=source)
 
-    def get_admin_logs(self, rows: int = 50) -> list:
+    def get_admin_logs(self, rows: int = 50, source: Optional[str] = None) -> list:
         """Read admin activity logs (logins, config changes, etc.)."""
-        data = self._check(
-            self.client.get(
-                f"{self.base_url}/log/disk/admin/login",
-                params=self._params({"rows": rows}),
-            )
-        )
-        return data.get("results", [])
+        return self._read_log("admin/login", {"rows": rows}, source=source)
 
     def get_system_status(self) -> dict:
         """Return system status: CPU, memory, disk, uptime, serial number, firmware version."""
@@ -181,6 +195,23 @@ class FortiGateClient:
         elif isinstance(results, dict):
             return results
         return {}
+
+    def get_resource_usage(self) -> dict:
+        """
+        Return live CPU / memory / disk / session usage from the monitor API.
+
+        These metrics live at /monitor/system/resource/usage, NOT in
+        /monitor/system/status. The response shape is:
+            {"results": {"cpu": [{"current": N}], "mem": [...], "disk": [...]}}
+        """
+        data = self._check(
+            self.client.get(
+                f"{self.base_url}/monitor/system/resource/usage",
+                params=self._params(),
+            )
+        )
+        results = data.get("results")
+        return results if isinstance(results, dict) else {}
 
     def get_interface_stats(self) -> list:
         """Return per-interface statistics: packets, bytes, errors, collisions."""
