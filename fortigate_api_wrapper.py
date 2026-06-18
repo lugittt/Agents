@@ -30,6 +30,24 @@ class FortiGateAPIWrapper:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def _format(self, result: dict) -> str:
+        """
+        Render a tool result as a JSON string. On error, surface the real
+        FortiGate message (e.g. HTTP 403/404) instead of crashing on a
+        missing 'data' key — so failing tools explain WHY they failed.
+        Also flags successful-but-empty results so the model knows the call
+        worked but the device returned nothing.
+        """
+        if result.get("status") == "error":
+            return json.dumps({"error": result.get("message")}, indent=2)
+        data = result.get("data")
+        if data in (None, [], {}, ""):
+            return json.dumps(
+                {"info": "The call succeeded but the device returned no data."},
+                indent=2,
+            )
+        return json.dumps(data, indent=2)
+
     def _log_source(self):
         """
         Optional fixed log source from FORTIGATE_LOG_SOURCE (disk|memory|forticloud).
@@ -281,27 +299,27 @@ class FortiGateAPIWrapper:
     def list_policies(self) -> str:
         """List all firewall policies."""
         result = self._call_tool("list_policies")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_policy(self, policy_id: int) -> str:
         """Get details of a specific policy."""
         result = self._call_tool("get_policy", policy_id=policy_id)
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def list_addresses(self) -> str:
         """List addresses and address groups."""
         result = self._call_tool("list_addresses")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def list_services(self) -> str:
         """List services and service groups."""
         result = self._call_tool("list_services")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def list_interfaces(self) -> str:
         """List network interfaces."""
         result = self._call_tool("list_interfaces")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_traffic_logs(
         self, srcip: str = None, dstip: str = None, action: str = None, policyid: int = None
@@ -310,49 +328,49 @@ class FortiGateAPIWrapper:
         result = self._call_tool(
             "get_traffic_logs", srcip=srcip, dstip=dstip, action=action, policyid=policyid
         )
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_policy_stats(self) -> str:
         """Get per-policy statistics."""
         result = self._call_tool("get_policy_stats")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_vpn_tunnels(self) -> str:
         """Get VPN tunnel status."""
         result = self._call_tool("get_vpn_tunnels")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_system_status(self) -> str:
         """Get system health and status."""
         result = self._call_tool("get_system_status")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def system_health_check(self) -> str:
         """Get an interpreted health summary (CPU/memory/disk + interface up/down)."""
         result = self._call_tool("system_health_check")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_admin_logs(self, rows: int = 50) -> str:
         """Get admin activity logs: logins and configuration changes (recent changes)."""
         result = self._call_tool("get_admin_logs", rows=rows)
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_system_logs(self, rows: int = 50, severity: str = None) -> str:
         """Get system event logs, optionally filtered by severity."""
         result = self._call_tool("get_system_logs", rows=rows, severity=severity)
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def get_interface_stats(self) -> str:
         """Get per-interface statistics: packets, bytes, errors."""
         result = self._call_tool("get_interface_stats")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def list_vips(self) -> str:
         """List virtual IPs (port forwarding / NAT mappings)."""
         result = self._call_tool("list_vips")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)
 
     def list_static_routes(self) -> str:
         """List configured static routes."""
         result = self._call_tool("list_static_routes")
-        return json.dumps(result["data"], indent=2)
+        return self._format(result)

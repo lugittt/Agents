@@ -21,6 +21,11 @@ from pdf_loader import PDFDocumentationLoader, create_documentation_context
 load_dotenv()
 
 
+# Ollama server URL — configurable via .env (OLLAMA_BASE_URL), e.g.
+# http://localhost:11434 (local) or http://192.168.1.100:11434 (remote).
+DEFAULT_OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
 # ==============================================================================
 # 0. TERMINAL COLORS
 # ==============================================================================
@@ -247,7 +252,7 @@ class FirewallAgent:
     def __init__(
         self,
         model: str = "llama2",
-        base_url: str = "http://localhost:11434",
+        base_url: str = None,
         temperature: float = 0.3,
     ):
         """
@@ -256,9 +261,12 @@ class FirewallAgent:
         Args:
             model: Ollama model name (default: llama2)
                    Popular options: llama2, mistral, neural-chat, openchat
-            base_url: Ollama server URL (default: http://localhost:11434)
+            base_url: Ollama server URL. Defaults to OLLAMA_BASE_URL from .env,
+                      falling back to http://localhost:11434.
             temperature: Model temperature (0-1, default: 0.3 for consistency)
         """
+        if base_url is None:
+            base_url = DEFAULT_OLLAMA_URL
         self.model_name = model
         self.base_url = base_url
 
@@ -269,7 +277,7 @@ class FirewallAgent:
             model=model,
             base_url=base_url,
             temperature=temperature,
-            num_ctx=4096,      # Context window size
+            num_ctx=8192,      # Larger window: docs + accumulated tool results must fit
             num_predict=1024,  # Generous cap so tool calls / answers aren't truncated
         )
 
@@ -397,6 +405,8 @@ When answering questions:
             Agent response with analysis and recommendations
         """
         system_prompt = self._build_system_prompt()
+        doc_tools = {"search_documentation", "get_documentation_section"}
+        doc_used = False  # set True when the model pulls from the documentation
 
         # Format prompt for Ollama
         prompt = f"""{system_prompt}
@@ -407,6 +417,7 @@ Instructions:
 - If the question needs firewall data, your FIRST output must be a tool call line:
   TOOL: tool_name(param=value)
   Output only that line — do not explain or answer yet. You will get the result next.
+  You may call several tools (across turns) — gather ALL the data you need first.
 - Once you have the data, answer using the real values. No examples or hypotheticals.
 - End every answer with a section titled "Recommendation:" containing 1-2 short,
   actionable suggestions drawn from the Official Documentation above. If the
@@ -419,9 +430,12 @@ Answer:"""
         # Get response from Ollama
         response = self.llm.invoke(prompt)
 
-        # Check if response mentions needing tool calls
+        # Tool-calling loop. Accumulate EVERY tool result so the model keeps
+        # full context across iterations (previously only the latest result
+        # was passed forward, which broke cross-tool correlation).
         max_iterations = 3
         iteration = 0
+        gathered = []  # list of (tool_name, result) across all iterations
 
         while "TOOL:" in response and iteration < max_iterations:
             iteration += 1
@@ -435,30 +449,52 @@ Answer:"""
             tool_name, params = tool_call
             print(f"[TOOL CALL] {tool_name}({params})")
 
-            # Call tool
-            tool_result = self._call_tool(tool_name, **params)
+            if tool_name in doc_tools:
+                doc_used = True
+                print(f"[PDF] Documentation lookup: {tool_name}({params})")
 
-            # Add tool result and continue
+            # Call tool and remember the result.
+            tool_result = self._call_tool(tool_name, **params)
+            gathered.append((tool_name, tool_result))
+
+            # Re-send ALL gathered data, not just the most recent result.
+            gathered_text = "\n\n".join(
+                f"Tool Result from {name}:\n{res}" for name, res in gathered
+            )
             prompt = f"""{system_prompt}
 
 User Question: {question}
 
-Previous Response:
-{response}
+Data gathered so far:
+{gathered_text}
 
-Tool Result from {tool_name}:
-{tool_result}
-
-Now answer the question using the real values from the tool result above.
-Be specific and focused, with no examples or hypotheticals. If you need more
-data, emit another TOOL: call instead of answering.
+Using ALL of the gathered data above, answer the question with the real values.
+Be specific and focused, with no examples or hypotheticals. If you still need
+more data, emit another TOOL: call instead of answering.
 End with a section titled "Recommendation:" containing 1-2 short, actionable
 suggestions drawn from the Official Documentation. If nothing in the
 documentation is relevant, write "Recommendation: none":"""
 
             response = self.llm.invoke(prompt)
 
-        return response
+        # Documentation contributes either via a doc tool call or via the
+        # docs-derived Recommendation section that ends each answer.
+        if doc_used or self._recommendation_present(response):
+            indicator = f"\n\n[PDF] Documentation used in this answer (source: {self.doc_source})"
+        else:
+            indicator = "\n\n[PDF] No documentation was used in this answer"
+
+        return response + indicator
+
+    def _recommendation_present(self, text: str) -> bool:
+        """True if the answer has a Recommendation section with real content."""
+        import re
+
+        m = re.search(r"Recommendation:\s*(.+)", text, re.IGNORECASE | re.DOTALL)
+        if not m:
+            return False
+        content = m.group(1).strip().lower()
+        return bool(content) and not content.startswith("none")
 
 
 # ==============================================================================
@@ -468,7 +504,7 @@ documentation is relevant, write "Recommendation: none":"""
 
 def create_firewall_agent(
     model: str = "llama2",
-    base_url: str = "http://localhost:11434",
+    base_url: str = None,
     temperature: float = 0.3,
 ) -> FirewallAgent:
     """
@@ -476,7 +512,8 @@ def create_firewall_agent(
 
     Args:
         model: Ollama model name (default: llama2)
-        base_url: Ollama server URL
+        base_url: Ollama server URL. Defaults to OLLAMA_BASE_URL from .env,
+                  falling back to http://localhost:11434.
         temperature: Model temperature (0-1)
 
     Returns:
