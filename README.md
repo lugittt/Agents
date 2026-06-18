@@ -111,7 +111,50 @@ for q in questions:
 "Show policy statistics"
 "Which policies are most active?"
 "List network interfaces"
+"What configuration changes were made recently?"
+"Is the firewall under resource pressure?"
 ```
+
+---
+
+## Available Tools
+
+The agent can call these tools automatically to answer your questions.
+
+### Policy & Configuration
+| Tool | Description |
+|------|-------------|
+| `list_firewall_policies` | List all firewall policies (summary) |
+| `get_firewall_policy` | Full detail of one policy by ID |
+| `get_address_objects` | Address objects and address groups |
+| `get_service_objects` | Service objects and service groups |
+| `get_network_interfaces` | Network interfaces |
+| `list_vips` | Virtual IPs (port forwarding / NAT mappings) |
+| `list_static_routes` | Configured static routes |
+
+### Monitoring & Health
+| Tool | Description |
+|------|-------------|
+| `get_firewall_health` | Raw system status (CPU, memory, disk, uptime, firmware, serial) |
+| `system_health_check` | **Interpreted** health summary with OK/WARN/CRITICAL flags + interface up/down counts |
+| `get_policy_statistics` | Per-policy hit counters (packets/bytes) |
+| `get_interface_stats` | Per-interface packets/bytes/errors/link state |
+| `get_vpn_status` | IPsec VPN tunnel status |
+
+### Logs & Recent Changes
+| Tool | Description |
+|------|-------------|
+| `get_traffic_logs` | Traffic logs (filters: srcip, dstip, action, policyid) |
+| `get_admin_logs` | **Recent admin logins and configuration changes** — what was last changed and by whom |
+| `get_system_logs` | System event logs (optional severity filter) |
+
+### Documentation
+| Tool | Description |
+|------|-------------|
+| `search_documentation` | Search built-in FortiGate documentation for a keyword |
+| `get_documentation_section` | Retrieve a specific documentation section |
+
+> **Note:** The log tools (`get_admin_logs`, `get_system_logs`, `get_traffic_logs`) require the API token to have **Log & Report → Log Access** read permission on the FortiGate. The other tools only need standard read access.
 
 ---
 
@@ -120,7 +163,7 @@ for q in questions:
 | File | Purpose |
 |------|---------|
 | **langchain_firewall_agent.py** | Main agent - entry point |
-| **mcp_fortigate_wrapper.py** | FortiGate API wrapper |
+| **fortigate_api_wrapper.py** | FortiGate API wrapper |
 | **pdf_loader.py** | Built-in documentation |
 | **fortigate.py** | Low-level REST API client |
 | **requirements.txt** | Python dependencies |
