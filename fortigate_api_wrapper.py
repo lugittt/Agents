@@ -30,6 +30,15 @@ class FortiGateAPIWrapper:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def _log_source(self):
+        """
+        Optional fixed log source from FORTIGATE_LOG_SOURCE (disk|memory|forticloud).
+        Returns None when unset, which lets the client auto-fall-back across
+        sources — needed because not every FortiGate logs to disk.
+        """
+        src = (os.environ.get("FORTIGATE_LOG_SOURCE") or "").strip().lower()
+        return src or None
+
     def _invoke_local_tool(self, tool_name: str, params: dict) -> Any:
         """
         Invoke FortiGate API tool methods by directly importing and calling.
@@ -102,7 +111,11 @@ class FortiGateAPIWrapper:
             action = params.get("action")
             policyid = params.get("policyid")
             logs = fg.get_traffic_logs(
-                srcip=srcip, dstip=dstip, action=action, policyid=policyid
+                source=self._log_source(),
+                srcip=srcip,
+                dstip=dstip,
+                action=action,
+                policyid=policyid,
             )
             return logs
 
@@ -123,12 +136,14 @@ class FortiGateAPIWrapper:
 
         elif tool_name == "get_admin_logs":
             rows = params.get("rows") or 50
-            return fg.get_admin_logs(rows=int(rows))
+            return fg.get_admin_logs(rows=int(rows), source=self._log_source())
 
         elif tool_name == "get_system_logs":
             rows = params.get("rows") or 50
             severity = params.get("severity")
-            return fg.get_system_logs(rows=int(rows), severity=severity)
+            return fg.get_system_logs(
+                rows=int(rows), severity=severity, source=self._log_source()
+            )
 
         elif tool_name == "get_interface_stats":
             return fg.get_interface_stats()
@@ -172,10 +187,17 @@ class FortiGateAPIWrapper:
     def _build_health_check(self, fg) -> dict:
         """
         Build an interpreted system health summary from system status +
-        interface stats, with simple OK/WARN flags so the model can reason
-        about resource pressure without parsing raw counters.
+        resource usage + interface stats, with simple OK/WARN flags so the
+        model can reason about resource pressure without parsing raw counters.
         """
         status = fg.get_system_status()
+
+        # CPU / memory / disk come from the resource-usage endpoint, NOT from
+        # system status (which only carries serial/version/hostname/uptime).
+        try:
+            usage = fg.get_resource_usage()
+        except Exception:
+            usage = {}
 
         def _pct(value):
             try:
@@ -183,9 +205,22 @@ class FortiGateAPIWrapper:
             except (TypeError, ValueError):
                 return None
 
-        cpu = _pct(status.get("cpu"))
-        mem = _pct(status.get("memory"))
-        disk = _pct(status.get("disk") or status.get("log_disk_usage"))
+        def _current(metric: str):
+            """Extract the latest sample for a resource metric from usage data."""
+            v = usage.get(metric)
+            if isinstance(v, list) and v:
+                v = v[0]
+            if isinstance(v, dict):
+                return _pct(v.get("current"))
+            return _pct(v)
+
+        cpu = _current("cpu")
+        mem = _current("mem")
+        # FortiOS reports memory as "mem" and disk as "disk"; fall back to
+        # alternate field names seen on some versions.
+        if mem is None:
+            mem = _current("memory")
+        disk = _current("disk")
 
         def _flag(value, warn, crit):
             if value is None:
