@@ -269,7 +269,8 @@ class FirewallAgent:
             model=model,
             base_url=base_url,
             temperature=temperature,
-            num_ctx=4096,  # Context window size
+            num_ctx=4096,      # Context window size
+            num_predict=350,   # Cap response length to keep answers short
         )
 
         self.documentation = create_documentation_context()
@@ -341,11 +342,12 @@ When answering questions:
 {self.documentation}
 
 ## Communication Style:
-- Be technical but clear
-- Always cite the documentation
-- Show examples from actual firewall configuration
-- Warn about potential side effects
-- Keep responses concise and focused"""
+- Be brief. Answer in at most 3-5 short sentences or a few bullet points.
+- Lead with the direct answer first; add detail only if essential.
+- Do NOT include examples, sample commands, or hypothetical scenarios unless explicitly asked.
+- Do NOT restate the question or pad with background the user did not request.
+- Only cite documentation when it directly justifies the answer.
+- Stop as soon as the question is answered."""
 
     def _call_tool(self, tool_name: str, **kwargs) -> str:
         """Call a tool and return result."""
@@ -402,8 +404,8 @@ User Question: {question}
 
 Instructions:
 - If you need data from the firewall, use tool calls with format: TOOL: tool_name(param=value)
-- Analyze the data and provide specific recommendations
-- Always reference the documentation when giving advice
+- Answer briefly: 3-5 short sentences or a few bullets, direct answer first.
+- No examples, sample commands, or extra background unless explicitly asked.
 
 Answer:"""
 
@@ -442,7 +444,7 @@ Previous Response:
 Tool Result from {tool_name}:
 {tool_result}
 
-Now provide a more complete answer based on this data:"""
+Now answer the question briefly (3-5 short sentences or a few bullets), direct answer first, no examples:"""
 
             response = self.llm.invoke(prompt)
 
