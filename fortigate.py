@@ -222,6 +222,15 @@ class FortiGateClient:
             )
         )
         results = data.get("results", [])
-        if isinstance(results, str):
-            return []
-        return results if isinstance(results, list) else []
+        if isinstance(results, list):
+            return results
+        # FortiOS often returns results as a dict keyed by interface name —
+        # normalize to a list, injecting the key as "name" when absent.
+        if isinstance(results, dict):
+            normalized = []
+            for name, stats in results.items():
+                if isinstance(stats, dict):
+                    stats = {"name": name, **stats} if "name" not in stats else stats
+                    normalized.append(stats)
+            return normalized
+        return []
