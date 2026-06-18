@@ -194,8 +194,34 @@ TOOLS = {
         "func": lambda: api.get_vpn_tunnels(),
     },
     "get_firewall_health": {
-        "description": "Get system health and status information.",
+        "description": "Get raw system health and status information (CPU, memory, disk, uptime, firmware, serial).",
         "func": lambda: api.get_system_status(),
+    },
+    "system_health_check": {
+        "description": "Run an interpreted health check. Returns CPU/memory/disk usage with OK/WARN/CRITICAL flags plus interface up/down counts. Use this to quickly assess whether the firewall is under resource pressure.",
+        "func": lambda: api.system_health_check(),
+    },
+    "get_admin_logs": {
+        "description": "Show the most recent administrator activity: logins and configuration CHANGES made on the device. Use this to find what was last changed and by whom. Optional 'rows' limits how many entries to return.",
+        "func": lambda rows=50: api.get_admin_logs(rows=int(rows)),
+        "params": {"rows": "int"},
+    },
+    "get_system_logs": {
+        "description": "Show system event logs (reboots, faults, daemon events). Optional 'severity' filter: critical, alert, error, warning, notice, info, debug. Optional 'rows' limits entries.",
+        "func": lambda rows=50, severity=None: api.get_system_logs(rows=int(rows), severity=severity),
+        "params": {"rows": "int", "severity": "str"},
+    },
+    "get_interface_stats": {
+        "description": "Get per-interface statistics: packets, bytes, errors, and link state.",
+        "func": lambda: api.get_interface_stats(),
+    },
+    "list_vips": {
+        "description": "List virtual IPs (port forwarding / NAT mappings) configured on the firewall.",
+        "func": lambda: api.list_vips(),
+    },
+    "list_static_routes": {
+        "description": "List configured static routes (destination, gateway, device, status).",
+        "func": lambda: api.list_static_routes(),
     },
     "search_documentation": {
         "description": "Search FortiGate documentation for a specific keyword or topic.",
@@ -484,6 +510,11 @@ def example_queries():
         "Which policies are getting the most traffic? Show me statistics.",
         "How should I troubleshoot a VPN tunnel that's down?",
         "Check my system health - is the firewall under resource pressure?",
+        "What configuration changes were made on the device recently?",
+        "Show me the last admin logins and who changed what.",
+        "Are there any critical system events in the logs?",
+        "List all port-forwarding VIPs configured on the firewall.",
+        "Show me the static routing table.",
         "Create a new policy that allows HTTP/HTTPS from internal networks to the DMZ",
         "Which policies are matching traffic from the LAN interface?",
         "Show me best practices for organizing firewall policies",

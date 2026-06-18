@@ -118,8 +118,114 @@ class FortiGateAPIWrapper:
             status = fg.get_system_status()
             return status
 
+        elif tool_name == "system_health_check":
+            return self._build_health_check(fg)
+
+        elif tool_name == "get_admin_logs":
+            rows = params.get("rows") or 50
+            return fg.get_admin_logs(rows=int(rows))
+
+        elif tool_name == "get_system_logs":
+            rows = params.get("rows") or 50
+            severity = params.get("severity")
+            return fg.get_system_logs(rows=int(rows), severity=severity)
+
+        elif tool_name == "get_interface_stats":
+            return fg.get_interface_stats()
+
+        elif tool_name == "list_vips":
+            vips = fg.list_vips()
+            return [
+                {
+                    "name": v.get("name"),
+                    "extip": v.get("extip", ""),
+                    "mappedip": [
+                        m["range"] if isinstance(m, dict) else m
+                        for m in v.get("mappedip", [])
+                    ],
+                    "extintf": v.get("extintf", ""),
+                    "portforward": v.get("portforward", ""),
+                    "extport": v.get("extport", ""),
+                    "mappedport": v.get("mappedport", ""),
+                }
+                for v in vips
+            ]
+
+        elif tool_name == "list_static_routes":
+            routes = fg.list_static_routes()
+            return [
+                {
+                    "seq_num": r.get("seq-num"),
+                    "dst": r.get("dst", ""),
+                    "gateway": r.get("gateway", ""),
+                    "device": r.get("device", ""),
+                    "distance": r.get("distance"),
+                    "status": r.get("status"),
+                    "comment": r.get("comment", ""),
+                }
+                for r in routes
+            ]
+
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
+
+    def _build_health_check(self, fg) -> dict:
+        """
+        Build an interpreted system health summary from system status +
+        interface stats, with simple OK/WARN flags so the model can reason
+        about resource pressure without parsing raw counters.
+        """
+        status = fg.get_system_status()
+
+        def _pct(value):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        cpu = _pct(status.get("cpu"))
+        mem = _pct(status.get("memory"))
+        disk = _pct(status.get("disk") or status.get("log_disk_usage"))
+
+        def _flag(value, warn, crit):
+            if value is None:
+                return "unknown"
+            if value >= crit:
+                return "CRITICAL"
+            if value >= warn:
+                return "WARN"
+            return "OK"
+
+        # Interface up/down summary (best effort — names/fields vary by model).
+        interfaces_up = interfaces_down = 0
+        try:
+            for iface in fg.get_interface_stats():
+                link = str(iface.get("link", iface.get("status", ""))).lower()
+                if link in ("up", "1", "true"):
+                    interfaces_up += 1
+                elif link in ("down", "0", "false"):
+                    interfaces_down += 1
+        except Exception:
+            pass
+
+        return {
+            "hostname": status.get("hostname"),
+            "serial": status.get("serial"),
+            "version": status.get("version"),
+            "uptime": status.get("uptime"),
+            "resources": {
+                "cpu_percent": cpu,
+                "cpu_status": _flag(cpu, 70, 90),
+                "memory_percent": mem,
+                "memory_status": _flag(mem, 70, 90),
+                "disk_percent": disk,
+                "disk_status": _flag(disk, 80, 95),
+            },
+            "interfaces": {
+                "up": interfaces_up,
+                "down": interfaces_down,
+            },
+        }
 
     def _policy_summary(self, p: dict) -> dict:
         """Format policy as summary."""
@@ -184,4 +290,34 @@ class FortiGateAPIWrapper:
     def get_system_status(self) -> str:
         """Get system health and status."""
         result = self._call_tool("get_system_status")
+        return json.dumps(result["data"], indent=2)
+
+    def system_health_check(self) -> str:
+        """Get an interpreted health summary (CPU/memory/disk + interface up/down)."""
+        result = self._call_tool("system_health_check")
+        return json.dumps(result["data"], indent=2)
+
+    def get_admin_logs(self, rows: int = 50) -> str:
+        """Get admin activity logs: logins and configuration changes (recent changes)."""
+        result = self._call_tool("get_admin_logs", rows=rows)
+        return json.dumps(result["data"], indent=2)
+
+    def get_system_logs(self, rows: int = 50, severity: str = None) -> str:
+        """Get system event logs, optionally filtered by severity."""
+        result = self._call_tool("get_system_logs", rows=rows, severity=severity)
+        return json.dumps(result["data"], indent=2)
+
+    def get_interface_stats(self) -> str:
+        """Get per-interface statistics: packets, bytes, errors."""
+        result = self._call_tool("get_interface_stats")
+        return json.dumps(result["data"], indent=2)
+
+    def list_vips(self) -> str:
+        """List virtual IPs (port forwarding / NAT mappings)."""
+        result = self._call_tool("list_vips")
+        return json.dumps(result["data"], indent=2)
+
+    def list_static_routes(self) -> str:
+        """List configured static routes."""
+        result = self._call_tool("list_static_routes")
         return json.dumps(result["data"], indent=2)
