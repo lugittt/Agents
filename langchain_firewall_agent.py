@@ -408,6 +408,9 @@ Instructions:
   TOOL: tool_name(param=value)
   Output only that line — do not explain or answer yet. You will get the result next.
 - Once you have the data, answer using the real values. No examples or hypotheticals.
+- End every answer with a section titled "Recommendation:" containing 1-2 short,
+  actionable suggestions drawn from the Official Documentation above. If the
+  documentation offers nothing relevant, write "Recommendation: none".
 
 Answer:"""
 
@@ -448,7 +451,10 @@ Tool Result from {tool_name}:
 
 Now answer the question using the real values from the tool result above.
 Be specific and focused, with no examples or hypotheticals. If you need more
-data, emit another TOOL: call instead of answering:"""
+data, emit another TOOL: call instead of answering.
+End with a section titled "Recommendation:" containing 1-2 short, actionable
+suggestions drawn from the Official Documentation. If nothing in the
+documentation is relevant, write "Recommendation: none":"""
 
             response = self.llm.invoke(prompt)
 
