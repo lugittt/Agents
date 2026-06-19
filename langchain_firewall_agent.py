@@ -225,8 +225,37 @@ TOOLS = {
         "func": lambda: api.list_vips(),
     },
     "list_static_routes": {
-        "description": "List configured static routes (destination, gateway, device, status).",
+        "description": "Use for CONFIGURED static routes. List static routes (destination, gateway, device, status).",
         "func": lambda: api.list_static_routes(),
+    },
+    "get_routing_table": {
+        "description": "Use for how traffic is ACTUALLY routed now / next-hop / effective routes. Returns the live IPv4 routing table (FIB), including connected and dynamic routes — not just static config.",
+        "func": lambda: api.get_routing_table(),
+    },
+    "get_firewall_sessions": {
+        "description": "Use for active/live connections, current sessions, who is connected right now. Returns active firewall sessions. Optional 'count' limits entries.",
+        "func": lambda count=50: api.get_firewall_sessions(),
+        "params": {"count": "int"},
+    },
+    "get_arp_table": {
+        "description": "Use for IP-to-MAC mappings, devices seen on the L2 network, ARP entries.",
+        "func": lambda: api.get_arp_table(),
+    },
+    "get_dhcp_leases": {
+        "description": "Use for which device has which IP, DHCP assignments, leased addresses, hostnames on the network.",
+        "func": lambda: api.get_dhcp_leases(),
+    },
+    "get_ha_status": {
+        "description": "Use for high availability / cluster / failover / HA peer status and sync state.",
+        "func": lambda: api.get_ha_status(),
+    },
+    "get_denied_traffic": {
+        "description": "Use for blocked/denied/dropped traffic. Shortcut returning traffic logs filtered to denied actions. Good for 'why is X blocked'.",
+        "func": lambda: api.get_denied_traffic(),
+    },
+    "get_resource_usage": {
+        "description": "Use for raw CPU/memory/disk usage numbers. For an interpreted OK/WARN/CRITICAL summary prefer system_health_check.",
+        "func": lambda: api.get_resource_usage(),
     },
     "search_documentation": {
         "description": "Search FortiGate documentation for a specific keyword or topic.",
@@ -356,12 +385,49 @@ When answering questions:
 - Base every answer on data you fetched with a tool, not on assumptions.
 - Give a complete, specific answer using the actual values from the firewall.
 - Do NOT include examples, sample commands, or hypothetical scenarios.
-- Be focused — no filler or restating the question — but do not omit relevant detail."""
+- Be focused — no filler or restating the question — but do not omit relevant detail.
+
+## Tool Selection Guide (match the user's intent to ONE tool):
+- rules / policies / what is allowed or blocked by config -> list_firewall_policies (one policy -> get_firewall_policy)
+- IP / subnet / address objects or groups -> get_address_objects
+- ports / protocols / services -> get_service_objects
+- interfaces / ports config / IP on a port -> get_network_interfaces
+- NAT / port forwarding / VIP -> list_vips
+- configured static routes -> list_static_routes
+- how traffic is routed now / next hop / effective routes -> get_routing_table
+- health / CPU / memory / disk / resource pressure -> system_health_check (raw numbers -> get_resource_usage)
+- firmware / serial / uptime / model -> get_firewall_health
+- live connections / active sessions / who is connected -> get_firewall_sessions
+- per-interface counters / errors / throughput -> get_interface_stats
+- IP-to-MAC / devices on LAN -> get_arp_table
+- which device has which IP / DHCP -> get_dhcp_leases
+- HA / cluster / failover -> get_ha_status
+- VPN tunnels up/down -> get_vpn_status
+- traffic logs / who went where -> get_traffic_logs ; blocked traffic -> get_denied_traffic
+- recent config CHANGES / who logged in -> get_admin_logs
+- system events / reboots / faults -> get_system_logs
+- policy hit counts / most active rules -> get_policy_statistics
+- best practice / how-to / explanation -> search_documentation or get_documentation_section
+
+Pick the single most specific tool. If unsure between two, choose the one whose
+keywords best match the question. Emit exactly one TOOL: line."""
 
     def _call_tool(self, tool_name: str, **kwargs) -> str:
         """Call a tool and return result."""
         if tool_name not in TOOLS:
-            return f"Unknown tool: {tool_name}"
+            # Resolve near-miss / hallucinated names (e.g. "check_health" ->
+            # "system_health_check") so a small slip doesn't abort the answer.
+            import difflib
+
+            close = difflib.get_close_matches(tool_name, list(TOOLS.keys()), n=1, cutoff=0.6)
+            if close:
+                print(f"[TOOL] Resolved '{tool_name}' -> '{close[0]}'")
+                tool_name = close[0]
+            else:
+                return (
+                    f"Unknown tool '{tool_name}'. Choose one of: "
+                    + ", ".join(TOOLS.keys())
+                )
 
         try:
             tool_info = TOOLS[tool_name]

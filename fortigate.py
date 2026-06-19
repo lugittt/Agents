@@ -234,3 +234,35 @@ class FortiGateClient:
                     normalized.append(stats)
             return normalized
         return []
+
+    def _monitor_list(self, path: str, extra: Optional[dict] = None) -> list:
+        """GET a monitor endpoint and normalize its results to a list."""
+        data = self._check(
+            self.client.get(f"{self.base_url}{path}", params=self._params(extra))
+        )
+        results = data.get("results", [])
+        if isinstance(results, list):
+            return results
+        if isinstance(results, dict):
+            return [results]
+        return []
+
+    def get_firewall_sessions(self, count: int = 50) -> list:
+        """Return active firewall sessions (live connections being tracked)."""
+        return self._monitor_list("/monitor/firewall/session", {"count": count})
+
+    def get_routing_table(self) -> list:
+        """Return the live (effective) IPv4 routing table / FIB."""
+        return self._monitor_list("/monitor/router/ipv4")
+
+    def get_arp_table(self) -> list:
+        """Return the ARP table (IP <-> MAC mappings on the L2 network)."""
+        return self._monitor_list("/monitor/network/arp")
+
+    def get_dhcp_leases(self) -> list:
+        """Return current DHCP leases (which client holds which IP)."""
+        return self._monitor_list("/monitor/system/dhcp")
+
+    def get_ha_status(self) -> list:
+        """Return HA cluster member status (peers, role, sync)."""
+        return self._monitor_list("/monitor/system/ha-peer")

@@ -199,6 +199,29 @@ class FortiGateAPIWrapper:
                 for r in routes
             ]
 
+        elif tool_name == "get_firewall_sessions":
+            count = params.get("count") or 50
+            return fg.get_firewall_sessions(count=int(count))
+
+        elif tool_name == "get_routing_table":
+            return fg.get_routing_table()
+
+        elif tool_name == "get_arp_table":
+            return fg.get_arp_table()
+
+        elif tool_name == "get_dhcp_leases":
+            return fg.get_dhcp_leases()
+
+        elif tool_name == "get_ha_status":
+            return fg.get_ha_status()
+
+        elif tool_name == "get_denied_traffic":
+            # Convenience shortcut: traffic logs filtered to denied/blocked.
+            return fg.get_traffic_logs(source=self._log_source(), action="deny")
+
+        elif tool_name == "get_resource_usage":
+            return fg.get_resource_usage()
+
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
 
@@ -373,4 +396,39 @@ class FortiGateAPIWrapper:
     def list_static_routes(self) -> str:
         """List configured static routes."""
         result = self._call_tool("list_static_routes")
+        return self._format(result)
+
+    def get_firewall_sessions(self, count: int = 50) -> str:
+        """List active firewall sessions (live connections)."""
+        result = self._call_tool("get_firewall_sessions", count=count)
+        return self._format(result)
+
+    def get_routing_table(self) -> str:
+        """Get the live (effective) routing table / FIB."""
+        result = self._call_tool("get_routing_table")
+        return self._format(result)
+
+    def get_arp_table(self) -> str:
+        """Get the ARP table (IP <-> MAC mappings)."""
+        result = self._call_tool("get_arp_table")
+        return self._format(result)
+
+    def get_dhcp_leases(self) -> str:
+        """Get current DHCP leases (which client holds which IP)."""
+        result = self._call_tool("get_dhcp_leases")
+        return self._format(result)
+
+    def get_ha_status(self) -> str:
+        """Get HA cluster member status."""
+        result = self._call_tool("get_ha_status")
+        return self._format(result)
+
+    def get_denied_traffic(self) -> str:
+        """Get denied/blocked traffic (filtered traffic logs)."""
+        result = self._call_tool("get_denied_traffic")
+        return self._format(result)
+
+    def get_resource_usage(self) -> str:
+        """Get raw CPU/memory/disk usage."""
+        result = self._call_tool("get_resource_usage")
         return self._format(result)
