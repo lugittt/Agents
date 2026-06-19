@@ -373,13 +373,17 @@ When answering questions:
 
     def _parse_tool_call(self, response_text: str) -> Optional[tuple]:
         """
-        Parse tool call from response.
-        Looks for patterns like: TOOL: tool_name(param=value)
+        Parse a tool call from the model's response.
+
+        Accepts both  TOOL: tool_name(param=value)  and the parenthesis-less
+        TOOL: tool_name  form. Being lenient matters: if "TOOL:" appears but
+        can't be parsed, the loop would otherwise break and dump the raw
+        "TOOL:" line to the user instead of running the tool.
         """
         import re
 
-        # Look for tool calls in response
-        pattern = r"TOOL:\s*(\w+)\((.*?)\)"
+        # Parentheses (and their contents) are optional.
+        pattern = r"TOOL:\s*(\w+)\s*(?:\((.*?)\))?"
         matches = re.findall(pattern, response_text)
 
         if matches:
