@@ -276,6 +276,26 @@ For performance:
         return results
 
 
+# Curated, real Fortinet documentation URLs (FortiOS 7.6). Only these links
+# may be cited in answers — the model must NOT invent any other URL.
+OFFICIAL_DOC_LINKS = {
+    "FortiGate docs home": "https://docs.fortinet.com/product/fortigate",
+    "Administration Guide": "https://docs.fortinet.com/document/fortigate/7.6.0/administration-guide",
+    "Best Practices": "https://docs.fortinet.com/document/fortigate/7.6.0/best-practices",
+    "FortiOS REST API": "https://docs.fortinet.com/document/fortigate/7.6.0/fortios-rest-api",
+    "CLI Reference": "https://docs.fortinet.com/document/fortigate/7.6.0/cli-reference",
+    "Hardware (FortiGate 200F)": "https://docs.fortinet.com/product/fortigate/hardware",
+    "Fortinet Community / KB": "https://community.fortinet.com",
+}
+
+
+def _reference_links_block() -> str:
+    lines = ["=== Reference Links (cite ONLY these exact URLs; never invent links) ==="]
+    for name, url in OFFICIAL_DOC_LINKS.items():
+        lines.append(f"- {name}: {url}")
+    return "\n".join(lines)
+
+
 def create_documentation_context(pdf_path: Optional[str] = None) -> str:
     """Create formatted documentation context for LangChain."""
     loader = PDFDocumentationLoader(pdf_path)
@@ -285,11 +305,12 @@ def create_documentation_context(pdf_path: Optional[str] = None) -> str:
 
 {doc_text}
 
+{_reference_links_block()}
+
 === Usage Guidelines ===
 When answering questions about FortiGate configuration:
 1. Reference specific sections from documentation
-2. Cite page numbers or section titles
-3. Provide examples from best practices
-4. Note any compatibility requirements
-5. Warn about deprecated features
+2. Cite section titles
+3. Note any compatibility requirements
+4. Warn about deprecated features
 """

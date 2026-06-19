@@ -384,8 +384,12 @@ When answering questions:
 ## Communication Style:
 - Base every answer on data you fetched with a tool, not on assumptions.
 - Give a complete, specific answer using the actual values from the firewall.
+- Add 1-3 sentences of relevant context/background so the answer is well-rounded
+  and the user understands the "why", not just the "what".
 - Do NOT include examples, sample commands, or hypothetical scenarios.
-- Be focused — no filler or restating the question — but do not omit relevant detail.
+- Be focused — no filler or restating the question.
+- In the Recommendation, when relevant, cite an official documentation link —
+  but ONLY a URL from the "Reference Links" list above. Never invent a URL.
 
 ## Tool Selection Guide (match the user's intent to ONE tool):
 - rules / policies / what is allowed or blocked by config -> list_firewall_policies (one policy -> get_firewall_policy)
@@ -489,9 +493,12 @@ Instructions:
   Output only that line — do not explain or answer yet. You will get the result next.
   You may call several tools (across turns) — gather ALL the data you need first.
 - Once you have the data, answer using the real values. No examples or hypotheticals.
-- End every answer with a section titled "Recommendation:" containing 1-2 short,
-  actionable suggestions drawn from the Official Documentation above. If the
-  documentation offers nothing relevant, write "Recommendation: none".
+- End every answer with a section titled "Recommendation:" containing 1-2
+  actionable suggestions drawn from the Official Documentation above, with a
+  brief reason. Where relevant, add an official link on its own line as
+  "Docs: <name> - <url>" using ONLY a URL from the Reference Links list (never
+  invent one). If the documentation offers nothing relevant, write
+  "Recommendation: none".
 
 Answer:"""
 
@@ -539,10 +546,13 @@ Data gathered so far:
 {gathered_text}
 
 Using ALL of the gathered data above, answer the question with the real values.
-Be specific and focused, with no examples or hypotheticals. If you still need
-more data, emit another TOOL: call instead of answering.
-End with a section titled "Recommendation:" containing 1-2 short, actionable
-suggestions drawn from the Official Documentation. If nothing in the
+Be specific, with no examples or hypotheticals, and add 1-3 sentences of
+relevant context so the answer is well-rounded. If you still need more data,
+emit another TOOL: call instead of answering.
+End with a section titled "Recommendation:" containing 1-2 actionable
+suggestions (with a brief reason) drawn from the Official Documentation. Where
+relevant, add an official link on its own line as "Docs: <name> - <url>" using
+ONLY a URL from the Reference Links list (never invent one). If nothing in the
 documentation is relevant, write "Recommendation: none":"""
 
             response = self.llm.invoke(prompt)
