@@ -169,6 +169,7 @@ The agent can call these tools automatically to answer your questions.
 | **requirements.txt** | Python dependencies |
 | **.env.template** | Config template (copy to .env) |
 | **README.md** | This file |
+| **ARCHITECTURE.md** | Architecture, file correlation diagram, traffic flow |
 
 ---
 
